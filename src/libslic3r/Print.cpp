@@ -1595,9 +1595,9 @@ std::pair<PrintBase::PrintValidationError, std::string> Print::validate() const
                 PrintRegion::collect_object_printing_extruders(config(), object->config(), region->config(), object_extruders);
                 double layer_height = object->config().layer_height.value;
                 for (uint16_t extruder_id : object_extruders) {
-                    double min_layer_height = config().min_layer_height.values[extruder_id];
-                    double max_layer_height = config().max_layer_height.values[extruder_id];
-                    double nozzle_diameter = config().nozzle_diameter.values[extruder_id];
+                    double nozzle_diameter = config().nozzle_diameter.get_at(extruder_id);
+                    double min_layer_height = config().min_layer_height.get_abs_value(extruder_id, nozzle_diameter);
+                    double max_layer_height = config().max_layer_height.get_abs_value(extruder_id, nozzle_diameter);
                     if (max_layer_height < EPSILON) max_layer_height = nozzle_diameter * 0.75;
                     if (min_layer_height > max_layer_height) return { PrintBase::PrintValidationError::pveWrongSettings, L("Min layer height can't be greater than Max layer height") };
                     if (max_layer_height > nozzle_diameter) return { PrintBase::PrintValidationError::pveWrongSettings, L("Max layer height can't be greater than nozzle diameter") };
@@ -1797,11 +1797,12 @@ void Print::process()
 {
     name_tbb_thread_pool_threads();
     bool something_done = !is_step_done_unguarded(psBrim);
-
     BOOST_LOG_TRIVIAL(info) << "Starting the slicing process." << log_memory_info();
     for (PrintObject *obj : m_objects)
         obj->make_perimeters();
     this->set_status(70, L("Infilling layers"));
+    //note: as object seems to be sliced independantly, it's maybe possible to add a tbb parallel_loop with simple partitioner on infill,
+    //  as prepare_infill has some function not // 
     for (PrintObject *obj : m_objects)
         obj->infill();
     for (PrintObject *obj : m_objects)
